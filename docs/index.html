@@ -116,6 +116,7 @@
       flex-wrap: wrap;
     }
     .batch-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .batch-actions select { max-width: 150px; }
     .btn {
       background: var(--accent);
       color: #0b0f19;
@@ -209,6 +210,7 @@
       <div class="batch-actions">
         <button class="btn btn-secondary" id="selectAllBtn" disabled>Select All</button>
         <button class="btn btn-secondary" id="deselectAllBtn" disabled>Deselect All</button>
+        <select id="batchPresetSelect" aria-label="Preset for selected wallpapers" disabled><option value="">Choose preset</option><option value="high-contrast">High Contrast</option><option value="natural">Natural</option><option value="vivid-dither">Vivid Dither</option><option value="soft">Soft</option></select>
         <button class="btn btn-secondary" id="applyPresetBtn" disabled>Apply Preset</button>
         <button class="btn btn-secondary" id="clearAllBtn" disabled>Clear All</button>
         <button class="btn" id="downloadZipBtn" disabled>Download ZIP</button>
@@ -275,6 +277,7 @@
     const selectAllBtn = document.getElementById('selectAllBtn');
     const deselectAllBtn = document.getElementById('deselectAllBtn');
     const applyPresetBtn = document.getElementById('applyPresetBtn');
+    const batchPresetSelect = document.getElementById('batchPresetSelect');
     const clearAllBtn = document.getElementById('clearAllBtn');
     const downloadZipBtn = document.getElementById('downloadZipBtn');
     const activeEditTitle = document.getElementById('editTitle');
@@ -317,18 +320,26 @@
     }
 
     Object.keys(loadPresets()).filter(name => !DEFAULT_PRESETS[name]).forEach(name => {
-      const option = document.createElement('option');
-      option.value = name; option.textContent = name;
-      presetSelect.appendChild(option);
+      [presetSelect, batchPresetSelect].forEach(select => {
+        const option = document.createElement('option');
+        option.value = name; option.textContent = name;
+        select.appendChild(option);
+      });
     });
 
     function saveCustomPreset(name, params) {
       const saved = JSON.parse(localStorage.getItem('ditherdeck-presets') || '{}');
       saved[name] = params;
       localStorage.setItem('ditherdeck-presets', JSON.stringify(saved));
-      const option = document.createElement('option');
-      option.value = name; option.textContent = name;
-      presetSelect.appendChild(option); presetSelect.value = name;
+      [presetSelect, batchPresetSelect].forEach(select => {
+        let option = Array.from(select.options).find(candidate => candidate.value === name);
+        if (!option) {
+          option = document.createElement('option');
+          option.value = name; option.textContent = name;
+          select.appendChild(option);
+        }
+        select.value = name;
+      });
     }
 
     function updateBatchUI() {
@@ -336,6 +347,7 @@
       selectAllBtn.disabled = !hasItems;
       deselectAllBtn.disabled = selectedItems.size === 0;
       applyPresetBtn.disabled = selectedItems.size === 0;
+      batchPresetSelect.disabled = !hasItems;
       clearAllBtn.disabled = !hasItems;
       downloadZipBtn.disabled = !hasItems;
       counter.textContent = `${items.length} wallpaper(s)${selectedItems.size ? ` (${selectedItems.size} selected)` : ''} ready`;
@@ -626,7 +638,7 @@
       items = []; selectedItems.clear(); updateBatchUI();
     });
     applyPresetBtn.addEventListener('click', async () => {
-      const name = prompt('Preset name:');
+      const name = batchPresetSelect.value;
       if (!name || !loadPresets()[name]) return;
       const rawParams = loadPresets()[name];
       const params = {
