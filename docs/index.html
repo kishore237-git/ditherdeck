@@ -230,7 +230,7 @@
       <label class="control">Brightness <input id="editBrightness" type="range" min="-100" max="100" value="0"><output id="editBrightnessValue">0</output></label>
       <label class="control">Dither <select id="editDither"><option value="fs">Floyd-Steinberg</option><option value="none">None</option></select><output></output></label>
       <label class="control">Preset <select id="presetSelect"><option value="">None</option><option value="high-contrast">High Contrast</option><option value="natural">Natural</option><option value="vivid-dither">Vivid Dither</option><option value="soft">Soft</option></select><output></output></label>
-      <div class="modal-actions"><input id="presetName" placeholder="Custom preset name" style="flex:1; min-width:0; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:0.45rem"><button class="btn btn-secondary" id="savePreset">Save Preset</button></div>
+      <div class="modal-actions"><input id="presetName" placeholder="Custom preset name" style="flex:1; min-width:0; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:0.45rem"><button class="btn btn-secondary" id="savePreset">Save Preset</button><button class="btn btn-secondary" id="deletePreset" disabled>Delete</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cancelEdit">Cancel</button><button class="btn" id="applyEdit">Apply</button></div>
     </div>
   </div>
@@ -264,6 +264,7 @@
     const editDither = document.getElementById('editDither');
     const presetSelect = document.getElementById('presetSelect');
     const presetName = document.getElementById('presetName');
+    const deletePreset = document.getElementById('deletePreset');
     const shareModal = document.getElementById('shareModal');
     const shareMessage = document.getElementById('shareMessage');
     const shareCount = document.getElementById('shareCount');
@@ -340,6 +341,7 @@
         }
         select.value = name;
       });
+      deletePreset.disabled = false;
     }
 
     function updateBatchUI() {
@@ -491,6 +493,7 @@
       editBrightness.value = item.params.brightness;
       editDither.value = item.params.dither;
       presetSelect.value = '';
+      deletePreset.disabled = true;
       updateEditorPreview();
       editModal.classList.add('active');
     }
@@ -506,6 +509,8 @@
     [editZoom, editContrast, editBrightness].forEach(input => input.addEventListener('input', updateEditorPreview));
     editDither.addEventListener('change', updateEditorPreview);
     presetSelect.addEventListener('change', () => {
+      const isCustom = presetSelect.value && !DEFAULT_PRESETS[presetSelect.value];
+      deletePreset.disabled = !isCustom;
       if (presetSelect.value) applyEditorPreset(loadPresets()[presetSelect.value]);
     });
     document.getElementById('savePreset').addEventListener('click', () => {
@@ -513,6 +518,19 @@
       if (!name) return;
       saveCustomPreset(name, { zoom: Number(editZoom.value), contrast: Number(editContrast.value), brightness: Number(editBrightness.value), dither: editDither.value });
       presetName.value = '';
+    });
+    deletePreset.addEventListener('click', () => {
+      const name = presetSelect.value;
+      if (!name || DEFAULT_PRESETS[name]) return;
+      const saved = JSON.parse(localStorage.getItem('ditherdeck-presets') || '{}');
+      delete saved[name];
+      localStorage.setItem('ditherdeck-presets', JSON.stringify(saved));
+      [presetSelect, batchPresetSelect].forEach(select => {
+        const option = Array.from(select.options).find(candidate => candidate.value === name);
+        if (option) option.remove();
+        select.value = '';
+      });
+      deletePreset.disabled = true;
     });
     let isPanning = false;
     let lastPointer = null;
