@@ -438,7 +438,7 @@
       const pixelSize = rowSize * height;
       const buffer = new ArrayBuffer(54 + pixelSize);
       const view = new DataView(buffer);
-      view.setUint16(0, 0x4d42, false);
+      view.setUint16(0, 0x4d42, true);
       view.setUint32(2, 54 + pixelSize, true);
       view.setUint32(10, 54, true);
       view.setUint32(14, 40, true);
