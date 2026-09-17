@@ -362,21 +362,33 @@
       const scale = Math.max(spec.width / item.img.width, spec.height / item.img.height) * params.zoom;
       const x = (spec.width - item.img.width * scale) / 2 + (params.panX || 0);
       const y = (spec.height - item.img.height * scale) / 2 + (params.panY || 0);
-      ctx.filter = `contrast(${params.contrast}) brightness(${100 + params.brightness}%)`;
       ctx.drawImage(item.img, x, y, item.img.width * scale, item.img.height * scale);
-      ctx.filter = 'none';
       applyDeviceTransform(ctx, spec, params);
     }
 
     function applyDeviceTransform(ctx, spec, params) {
-      if (spec.mode === 'color') return;
       const image = ctx.getImageData(0, 0, spec.width, spec.height);
       const pixels = image.data;
+      const contrast = Number.isFinite(Number(params.contrast)) ? Number(params.contrast) : 1;
+      const brightness = Number.isFinite(Number(params.brightness)) ? Number(params.brightness) : 0;
+
+      if (spec.mode === 'color') {
+        for (let i = 0; i < pixels.length; i += 4) {
+          for (let channel = 0; channel < 3; channel++) {
+            const adjusted = ((pixels[i + channel] - 128) * contrast) + 128 + brightness;
+            pixels[i + channel] = Math.max(0, Math.min(255, Math.round(adjusted)));
+          }
+        }
+        ctx.putImageData(image, 0, 0);
+        return;
+      }
+
       const gray = new Float32Array(spec.width * spec.height);
       const levels = spec.mode === 'gray4' ? 4 : 16;
       for (let i = 0; i < gray.length; i++) {
         const p = i * 4;
-        gray[i] = 0.299 * pixels[p] + 0.587 * pixels[p + 1] + 0.114 * pixels[p + 2];
+        const luminance = 0.299 * pixels[p] + 0.587 * pixels[p + 1] + 0.114 * pixels[p + 2];
+        gray[i] = Math.max(0, Math.min(255, ((luminance - 128) * contrast) + 128 + brightness));
       }
       for (let y = 0; y < spec.height; y++) {
         for (let x = 0; x < spec.width; x++) {
