@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Vetchalabs Wallpaper Studio - Minimal Working Version</title>
+  <title>Vetchalabs Wallpaper Studio</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -723,7 +723,7 @@
       }
 
       downloadBlob(blob, filename);
-      window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n\nThe generated ${filename} was downloaded for attachment.`)}`, '_blank');
+      window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n\nThe generated ${filename} was downloaded. Please attach it manually in WhatsApp.`)}`, '_blank');
       shareModal.classList.remove('active');
     });
     document.getElementById('shareEmail').addEventListener('click', async () => {
