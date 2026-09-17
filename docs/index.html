@@ -144,7 +144,9 @@
     }
     .card canvas {
       width: 100%;
-      height: 140px;
+      height: auto;
+      aspect-ratio: 3 / 5;
+      object-fit: contain;
       border-radius: 4px;
       background: #000;
     }
@@ -163,6 +165,7 @@
     .modal.active { display: flex; }
     .modal-content { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; width: min(100%, 420px); }
     .modal-content h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
+    .device-info { color: var(--muted); font-size: 0.78rem; margin: -0.35rem 0 0.75rem; }
     .edit-preview { display: block; width: 100%; max-height: 45vh; object-fit: contain; background: #000; margin-bottom: 0.75rem; }
     .control { display: grid; grid-template-columns: 90px 1fr 42px; align-items: center; gap: 0.5rem; margin: 0.55rem 0; font-size: 0.8rem; }
     .control output { text-align: right; color: var(--muted); }
@@ -207,6 +210,7 @@
   <div class="modal" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
     <div class="modal-content">
       <h2 id="editTitle">Edit wallpaper</h2>
+      <p class="device-info" id="editDeviceInfo"></p>
       <canvas class="edit-preview" id="editCanvas"></canvas>
       <label class="control">Zoom <input id="editZoom" type="range" min="1" max="2" step="0.01" value="1"><output id="editZoomValue">1.00</output></label>
       <label class="control">Contrast <input id="editContrast" type="range" min="0.5" max="2" step="0.05" value="1"><output id="editContrastValue">1.00</output></label>
@@ -231,6 +235,7 @@
     const editContrast = document.getElementById('editContrast');
     const editBrightness = document.getElementById('editBrightness');
     const activeEditTitle = document.getElementById('editTitle');
+    const editDeviceInfo = document.getElementById('editDeviceInfo');
     let activeItem = null;
     const deviceSpecs = {
       xteink: { width: 480, height: 800, badge: '480 × 800 • 4-Level BMP' },
@@ -277,12 +282,16 @@
     }
 
     function redrawItem(item) {
+      const spec = deviceSpecs[devicePreset.value];
+      item.canvas.style.aspectRatio = `${spec.width} / ${spec.height}`;
       drawItem(item, item.canvas, item.params);
     }
 
     function openEditor(item) {
       activeItem = item;
+      const spec = deviceSpecs[devicePreset.value];
       activeEditTitle.textContent = `Edit ${item.filename}`;
+      editDeviceInfo.textContent = `${devicePreset.options[devicePreset.selectedIndex].text} | ${spec.width} × ${spec.height} | Defaults: zoom 1.00, contrast 1.00, brightness 0`;
       editZoom.value = item.params.zoom;
       editContrast.value = item.params.contrast;
       editBrightness.value = item.params.brightness;
@@ -331,6 +340,7 @@
           
           const canvas = document.createElement('canvas');
           item.canvas = canvas;
+          canvas.style.aspectRatio = `${deviceSpecs[devicePreset.value].width} / ${deviceSpecs[devicePreset.value].height}`;
           drawItem(item, canvas, item.params);
           
           const card = document.createElement('div');
