@@ -709,7 +709,25 @@
     shareMessage.addEventListener('input', () => { shareCount.textContent = `${shareMessage.value.length}/200 characters`; });
     document.getElementById('closeShare').addEventListener('click', () => shareModal.classList.remove('active'));
     document.getElementById('shareWhatsapp').addEventListener('click', () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText())}`, '_blank'));
-    document.getElementById('shareEmail').addEventListener('click', () => window.open(`mailto:?subject=${encodeURIComponent('My DitherDeck wallpaper')}&body=${encodeURIComponent(shareText())}`));
+    document.getElementById('shareEmail').addEventListener('click', async () => {
+      if (!activeItem) return;
+      const spec = deviceSpecs[devicePreset.value];
+      const filename = `${activeItem.filename.replace(/\.[^/.]+$/, '')}.${spec.ext}`;
+      const blob = await getExportBlob(activeItem);
+      const file = new File([blob], filename, { type: spec.mode === 'gray4' ? 'image/bmp' : 'image/png' });
+      const text = shareText();
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: 'My DitherDeck wallpaper', text, files: [file] });
+        shareModal.classList.remove('active');
+        return;
+      }
+
+      downloadBlob(blob, filename);
+      const fallbackText = `${text}\n\nThe generated ${filename} was downloaded. Please attach it to this email.`;
+      window.open(`mailto:?subject=${encodeURIComponent('My DitherDeck wallpaper')}&body=${encodeURIComponent(fallbackText)}`);
+      shareModal.classList.remove('active');
+    });
     document.getElementById('shareCopy').addEventListener('click', async () => {
       await navigator.clipboard.writeText(shareText());
       shareModal.classList.remove('active');
