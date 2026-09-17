@@ -344,12 +344,10 @@
 
     function applyEditorPreset(params) {
       const safeParams = {
-        zoom: Number.isFinite(Number(params && params.zoom)) && Number(params.zoom) >= 1 ? Number(params.zoom) : 1,
         contrast: Number.isFinite(Number(params && params.contrast)) ? Number(params.contrast) : 1.15,
         brightness: Number.isFinite(Number(params && params.brightness)) ? Number(params.brightness) : 0,
         dither: params && params.dither === 'none' ? 'none' : 'fs'
       };
-      editZoom.value = safeParams.zoom;
       editContrast.value = safeParams.contrast;
       editBrightness.value = safeParams.brightness;
       editDither.value = safeParams.dither;
@@ -620,7 +618,6 @@
       if (!name || !loadPresets()[name]) return;
       const rawParams = loadPresets()[name];
       const params = {
-        zoom: Number.isFinite(Number(rawParams.zoom)) && Number(rawParams.zoom) >= 1 ? Number(rawParams.zoom) : 1,
         contrast: Number.isFinite(Number(rawParams.contrast)) ? Number(rawParams.contrast) : 1.15,
         brightness: Number.isFinite(Number(rawParams.brightness)) ? Number(rawParams.brightness) : 0,
         dither: rawParams.dither === 'none' ? 'none' : 'fs'
