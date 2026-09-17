@@ -444,7 +444,13 @@
       view.setInt32(22, height, true);
       view.setUint16(26, 1, true);
       view.setUint16(28, 24, true);
+      view.setUint32(30, 0, true);
       view.setUint32(34, pixelSize, true);
+      view.setInt32(38, 2835, true);
+      view.setInt32(42, 2835, true);
+      view.setUint32(46, 0, true);
+      view.setUint32(50, 0, true);
+      const padding = rowSize - (width * 3);
       let offset = 54;
       for (let y = height - 1; y >= 0; y--) {
         for (let x = 0; x < width; x++) {
@@ -453,7 +459,7 @@
           view.setUint8(offset++, rgbaData[source + 1]);
           view.setUint8(offset++, rgbaData[source]);
         }
-        while (offset % 4 !== 2) view.setUint8(offset++, 0);
+        for (let pad = 0; pad < padding; pad++) view.setUint8(offset++, 0);
       }
       return new Blob([buffer], { type: 'image/bmp' });
     }
@@ -466,7 +472,7 @@
         link.href = URL.createObjectURL(blob);
         link.download = `${baseName}.${spec.ext}`;
         link.click();
-        URL.revokeObjectURL(link.href);
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
       };
       if (spec.mode === 'gray4') {
         download(create24BitBMP(item.canvas.getContext('2d').getImageData(0, 0, spec.width, spec.height).data, spec.width, spec.height));
@@ -672,7 +678,7 @@
       const link = document.createElement('a');
       link.href = typeof blob === 'string' ? blob : URL.createObjectURL(blob);
       link.download = filename; link.click();
-      if (typeof blob !== 'string') URL.revokeObjectURL(link.href);
+      if (typeof blob !== 'string') setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     }
     function openShare(item) {
       activeItem = item; shareMessage.value = ''; shareCount.textContent = '0/200 characters'; shareModal.classList.add('active');
