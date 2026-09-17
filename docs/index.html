@@ -115,6 +115,7 @@
       gap: 0.5rem;
       flex-wrap: wrap;
     }
+    .batch-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
     .btn {
       background: var(--accent);
       color: #0b0f19;
@@ -165,6 +166,7 @@
     .modal.active { display: flex; }
     .modal-content { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; width: min(100%, 420px); }
     .modal-content h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
+    .modal-content textarea { width: 100%; min-height: 90px; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; font: inherit; }
     .device-info { color: var(--muted); font-size: 0.78rem; margin: -0.35rem 0 0.75rem; }
     .edit-preview { display: block; width: 100%; max-height: 45vh; object-fit: contain; background: #000; margin-bottom: 0.75rem; }
     .edit-preview { touch-action: none; cursor: grab; }
@@ -204,6 +206,13 @@
 
     <div class="actions">
       <span id="counter" style="color: var(--muted); font-size: 0.85rem;">0 wallpapers</span>
+      <div class="batch-actions">
+        <button class="btn btn-secondary" id="selectAllBtn" disabled>Select All</button>
+        <button class="btn btn-secondary" id="deselectAllBtn" disabled>Deselect All</button>
+        <button class="btn btn-secondary" id="applyPresetBtn" disabled>Apply Preset</button>
+        <button class="btn btn-secondary" id="clearAllBtn" disabled>Clear All</button>
+        <button class="btn" id="downloadZipBtn" disabled>Download ZIP</button>
+      </div>
     </div>
 
     <div class="grid" id="previewGrid"></div>
@@ -218,10 +227,23 @@
       <label class="control">Contrast <input id="editContrast" type="range" min="0.5" max="2" step="0.05" value="1"><output id="editContrastValue">1.00</output></label>
       <label class="control">Brightness <input id="editBrightness" type="range" min="-100" max="100" value="0"><output id="editBrightnessValue">0</output></label>
       <label class="control">Dither <select id="editDither"><option value="fs">Floyd-Steinberg</option><option value="none">None</option></select><output></output></label>
+      <label class="control">Preset <select id="presetSelect"><option value="">None</option><option value="high-contrast">High Contrast</option><option value="natural">Natural</option><option value="vivid-dither">Vivid Dither</option><option value="soft">Soft</option></select><output></output></label>
+      <div class="modal-actions"><input id="presetName" placeholder="Custom preset name" style="flex:1; min-width:0; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:0.45rem"><button class="btn btn-secondary" id="savePreset">Save Preset</button></div>
       <div class="modal-actions"><button class="btn btn-secondary" id="cancelEdit">Cancel</button><button class="btn" id="applyEdit">Apply</button></div>
     </div>
   </div>
 
+  <div class="modal" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+    <div class="modal-content">
+      <h2 id="shareTitle">Share wallpaper</h2>
+      <textarea id="shareMessage" maxlength="200" placeholder="Add your message here (optional)..."></textarea>
+      <p id="shareCount" class="device-info">0/200 characters</p>
+      <div class="modal-actions"><button class="btn" id="shareWhatsapp">WhatsApp</button><button class="btn" id="shareEmail">Email</button><button class="btn" id="shareCopy">Copy</button></div>
+      <div class="modal-actions"><button class="btn btn-secondary" id="closeShare">Close</button></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script>
     console.log("App starting...");
 
@@ -238,6 +260,23 @@
     const editContrast = document.getElementById('editContrast');
     const editBrightness = document.getElementById('editBrightness');
     const editDither = document.getElementById('editDither');
+    const presetSelect = document.getElementById('presetSelect');
+    const presetName = document.getElementById('presetName');
+    const shareModal = document.getElementById('shareModal');
+    const shareMessage = document.getElementById('shareMessage');
+    const shareCount = document.getElementById('shareCount');
+    const selectedItems = new Set();
+    const DEFAULT_PRESETS = {
+      'high-contrast': { zoom: 1, contrast: 1.8, brightness: 5, dither: 'fs' },
+      natural: { zoom: 1, contrast: 1.15, brightness: 0, dither: 'fs' },
+      'vivid-dither': { zoom: 1, contrast: 1.5, brightness: 10, dither: 'fs' },
+      soft: { zoom: 1, contrast: 0.9, brightness: -10, dither: 'none' }
+    };
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deselectAllBtn = document.getElementById('deselectAllBtn');
+    const applyPresetBtn = document.getElementById('applyPresetBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const downloadZipBtn = document.getElementById('downloadZipBtn');
     const activeEditTitle = document.getElementById('editTitle');
     const editDeviceInfo = document.getElementById('editDeviceInfo');
     let activeItem = null;
@@ -271,6 +310,43 @@
     
     // ========== IMAGE LOADING ==========
     let items = [];
+
+    function loadPresets() {
+      try { return { ...DEFAULT_PRESETS, ...JSON.parse(localStorage.getItem('ditherdeck-presets') || '{}') }; }
+      catch { return { ...DEFAULT_PRESETS }; }
+    }
+
+    Object.keys(loadPresets()).filter(name => !DEFAULT_PRESETS[name]).forEach(name => {
+      const option = document.createElement('option');
+      option.value = name; option.textContent = name;
+      presetSelect.appendChild(option);
+    });
+
+    function saveCustomPreset(name, params) {
+      const saved = JSON.parse(localStorage.getItem('ditherdeck-presets') || '{}');
+      saved[name] = params;
+      localStorage.setItem('ditherdeck-presets', JSON.stringify(saved));
+      const option = document.createElement('option');
+      option.value = name; option.textContent = name;
+      presetSelect.appendChild(option); presetSelect.value = name;
+    }
+
+    function updateBatchUI() {
+      const hasItems = items.length > 0;
+      selectAllBtn.disabled = !hasItems;
+      deselectAllBtn.disabled = selectedItems.size === 0;
+      applyPresetBtn.disabled = selectedItems.size === 0;
+      clearAllBtn.disabled = !hasItems;
+      downloadZipBtn.disabled = !hasItems;
+      counter.textContent = `${items.length} wallpaper(s)${selectedItems.size ? ` (${selectedItems.size} selected)` : ''} ready`;
+      items.forEach(item => item.checkbox && (item.checkbox.checked = selectedItems.has(item.id)));
+    }
+
+    function applyEditorPreset(params) {
+      editZoom.value = params.zoom; editContrast.value = params.contrast;
+      editBrightness.value = params.brightness; editDither.value = params.dither;
+      updateEditorPreview();
+    }
 
     function drawItem(item, canvas, params) {
       const spec = deviceSpecs[devicePreset.value];
@@ -378,6 +454,7 @@
       editContrast.value = item.params.contrast;
       editBrightness.value = item.params.brightness;
       editDither.value = item.params.dither;
+      presetSelect.value = '';
       updateEditorPreview();
       editModal.classList.add('active');
     }
@@ -392,6 +469,15 @@
 
     [editZoom, editContrast, editBrightness].forEach(input => input.addEventListener('input', updateEditorPreview));
     editDither.addEventListener('change', updateEditorPreview);
+    presetSelect.addEventListener('change', () => {
+      if (presetSelect.value) applyEditorPreset(loadPresets()[presetSelect.value]);
+    });
+    document.getElementById('savePreset').addEventListener('click', () => {
+      const name = presetName.value.trim();
+      if (!name) return;
+      saveCustomPreset(name, { zoom: Number(editZoom.value), contrast: Number(editContrast.value), brightness: Number(editBrightness.value), dither: editDither.value });
+      presetName.value = '';
+    });
     let isPanning = false;
     let lastPointer = null;
     editCanvas.addEventListener('pointerdown', event => {
@@ -450,6 +536,15 @@
           const card = document.createElement('div');
           card.className = 'card';
           card.appendChild(canvas);
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.title = 'Select wallpaper';
+          checkbox.addEventListener('change', () => {
+            if (checkbox.checked) selectedItems.add(item.id); else selectedItems.delete(item.id);
+            updateBatchUI();
+          });
+          item.checkbox = checkbox;
           
           const label = document.createElement('span');
           label.textContent = file.name;
@@ -457,6 +552,7 @@
 
           const cardActions = document.createElement('div');
           cardActions.className = 'card-actions';
+          card.appendChild(checkbox);
           const editButton = document.createElement('button');
           editButton.className = 'btn';
           editButton.textContent = '✏️ Edit';
@@ -470,12 +566,20 @@
           saveButton.type = 'button';
           saveButton.addEventListener('click', () => saveItem(item));
           cardActions.appendChild(saveButton);
+          const shareButton = document.createElement('button');
+          shareButton.className = 'btn btn-secondary'; shareButton.textContent = 'Share'; shareButton.type = 'button';
+          shareButton.addEventListener('click', () => openShare(item));
+          cardActions.appendChild(shareButton);
+          const deleteButton = document.createElement('button');
+          deleteButton.className = 'btn btn-secondary'; deleteButton.textContent = 'Delete'; deleteButton.type = 'button';
+          deleteButton.addEventListener('click', () => removeItem(item));
+          cardActions.appendChild(deleteButton);
           item.card = card;
           card.appendChild(cardActions);
           
           previewGrid.appendChild(card);
           items.push(item);
-          counter.textContent = `${items.length} wallpaper(s) ready`;
+          updateBatchUI();
         };
         img.onerror = () => {
           console.error('Failed to load image:', file.name);
@@ -483,6 +587,73 @@
         img.src = URL.createObjectURL(file);
       }
       fileInput.value = '';
+    });
+
+    function removeItem(item) {
+      item.card.remove();
+      items = items.filter(candidate => candidate !== item);
+      selectedItems.delete(item.id);
+      updateBatchUI();
+    }
+
+    selectAllBtn.addEventListener('click', () => {
+      items.forEach(item => selectedItems.add(item.id));
+      updateBatchUI();
+    });
+    deselectAllBtn.addEventListener('click', () => {
+      selectedItems.clear(); updateBatchUI();
+    });
+    clearAllBtn.addEventListener('click', () => {
+      items.forEach(item => item.card.remove());
+      items = []; selectedItems.clear(); updateBatchUI();
+    });
+    applyPresetBtn.addEventListener('click', async () => {
+      const name = prompt('Preset name:');
+      if (!name || !loadPresets()[name]) return;
+      const params = loadPresets()[name];
+      for (const item of items.filter(candidate => selectedItems.has(candidate.id))) {
+        item.params = { ...item.params, ...params };
+        redrawItem(item);
+      }
+    });
+    downloadZipBtn.addEventListener('click', async () => {
+      if (!window.JSZip) return;
+      const zip = new JSZip();
+      const folder = zip.folder(devicePreset.value);
+      for (const item of items) {
+        const filename = `${item.filename.replace(/\.[^/.]+$/, '')}.${deviceSpecs[devicePreset.value].ext}`;
+        folder.file(filename, await getExportBlob(item));
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(blob, 'ditherdeck-wallpapers.zip');
+    });
+
+    function getExportBlob(item) {
+      const spec = deviceSpecs[devicePreset.value];
+      if (spec.mode === 'gray4') return create24BitBMP(item.canvas.getContext('2d').getImageData(0, 0, spec.width, spec.height).data, spec.width, spec.height);
+      return new Promise(resolve => item.canvas.toBlob(resolve, 'image/png'));
+    }
+    function downloadBlob(blob, filename) {
+      const link = document.createElement('a');
+      link.href = typeof blob === 'string' ? blob : URL.createObjectURL(blob);
+      link.download = filename; link.click();
+      if (typeof blob !== 'string') URL.revokeObjectURL(link.href);
+    }
+    function openShare(item) {
+      activeItem = item; shareMessage.value = ''; shareCount.textContent = '0/200 characters'; shareModal.classList.add('active');
+    }
+    function shareText() {
+      const message = shareMessage.value.trim();
+      const link = `${window.location.origin}${window.location.pathname}?device=${devicePreset.value}`;
+      return message ? `${message}\n\nMade with DitherDeck\n${link}` : `Check out my e-ink wallpaper made with DitherDeck!\n${link}`;
+    }
+    shareMessage.addEventListener('input', () => { shareCount.textContent = `${shareMessage.value.length}/200 characters`; });
+    document.getElementById('closeShare').addEventListener('click', () => shareModal.classList.remove('active'));
+    document.getElementById('shareWhatsapp').addEventListener('click', () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText())}`, '_blank'));
+    document.getElementById('shareEmail').addEventListener('click', () => window.open(`mailto:?subject=${encodeURIComponent('My DitherDeck wallpaper')}&body=${encodeURIComponent(shareText())}`));
+    document.getElementById('shareCopy').addEventListener('click', async () => {
+      await navigator.clipboard.writeText(shareText());
+      shareModal.classList.remove('active');
     });
     
     console.log("App fully initialized - theme toggle and image loading ready!");
