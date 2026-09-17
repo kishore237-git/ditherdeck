@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Vetchalabs Wallpaper Studio</title>
+  <!-- CDN scripts - load async to prevent blocking -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js" defer></script>
+  <style>
+    :root {
+      /* Dark theme (default) */
+      --bg: #0b0f19;
+      --card-bg: #1e293b;
+      --accent: #38bdf8;
+      --danger: #f87171;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --border: #334155;
+    }
+    
+    /* Light theme */
+    body.light-theme {
+      --bg: #f8fafc;
+      --card-bg: #e2e8f0;
+      --accent: #0284c7;
+      --danger: #dc2626;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #cbd5e1;
+    }
+    
+    * { box-sizing: border-box; touch-action: manipulation; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: background-color 0.3s, color 0.3s;
+      position: relative;
+    }
+    .container { width: 100%; max-width: 860px; }
+    header { text-align: center; margin-bottom: 1.25rem; }
+    h1 { margin: 0 0 0.3rem; font-size: 1.5rem; letter-spacing: -0.02em; }
+    p { color: var(--muted); margin: 0; font-size: 0.85rem; }
+
+    /* Theme Toggle Button */
+    .theme-toggle {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+    .theme-toggle:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Preset Selection Bar */
+    .preset-bar {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .preset-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .preset-group label { font-size: 0.85rem; font-weight: 600; color: var(--accent); }
+    select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .badge {
+      font-size: 0.75rem;
+      background: #0284c722;
+      color: var(--accent);
+      border: 1px solid #0284c744;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .file-label {
+      display: block;
+      border: 2px dashed var(--border);
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 1.25rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      margin-bottom: 1rem;
+      transition: border-color 0.2s;
+    }
+    .file-label:hover { border-color: var(--accent); }
+    input[type="file"] { display: none; }
+
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .btn-group { display: flex; gap: 0.5rem; }
+    .btn {
+      background: var(--accent);
+      color: #0b0f19;
+      font-weight: 600;
+      border: none;
+      padding: 0.55rem 0.95rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .btn:disabled { background: var(--border); color: #64748b; cursor: not-allowed; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.85rem;
+    }
+    .card {
+      background: var(--card-bg);
+      border-radius: 8px;
+      padding: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      position: relative;
+    }
+    .card.selected {
+      border: 2px solid var(--accent);
+    }
+    .card-checkbox {
+      position: absolute;
+      top: 0.3rem;
+      left: 0.3rem;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+    .card canvas {
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+      cursor: pointer;
+      background: #000;
+    }
+    .card span {
+      font-size: 0.7rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      text-align: center;
+    }
+    .card-actions {
+      display: flex;
+      width: 100%;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+    }
+    .card-actions button {
+      flex: 1;
+      min-width: 45px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 0.3rem 0.2rem;
+      font-size: 0.7rem;
+      cursor: pointer;
+    }
+    .card-actions button.del-btn {
+      flex: 0 0 28px;
+      min-width: 28px;
+      color: var(--danger);
+      border-color: #ef444444;
+    }
+
+    /* Interactive Editor Modal */
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      z-index: 100;
+    }
+    .modal.active { display: flex; }
+    .modal-content {
+      background: var(--card-bg);
+      border-radius: 12px;
+      max-width: 450px;
+      width: 100%;
+      max-height: 94vh;
+      overflow-y: auto;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .preview-container {
+      position: relative;
+      border: 2px solid var(--accent);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #000;
+      touch-action: none;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .preview-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .watch-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+      flex-direction: column;
+      align-items: flex-end;
+      padding: 1.25rem 1rem;
+      color: white;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      font-family: system-ui, sans-serif;
+    }
+    .watch-overlay .time { font-size: 2.2rem; font-weight: 600; line-height: 1; }
+    .watch-overlay .date { font-size: 0.75rem; color: #f87171; font-weight: 600; text-transform: uppercase; margin-bottom: 2px; }
+
+    .controls {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .control-row input[type="range"] { flex: 1; }
+    .modal-buttons {
+      display: flex;
+      width: 100%;
+      gap: 0.5rem;
+      margin-top: 0.4rem;
+    }
+    .modal-buttons button { flex: 1; }
+
+    /* Mobile Responsive Styles */
+    @media (max-width: 768px) {
+      body { padding: 0.75rem; }
+      .container { max-width: 100%; }
+      .theme-toggle { top: 0.5rem; right: 0.5rem; padding: 0.35rem 0.5rem; font-size: 0.9rem; }
+      
+      header h1 { font-size: 1.2rem; }
+      header p { font-size: 0.75rem; }
+      
+      .preset-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 0.5rem;
+      }
+      .preset-group { width: 100%; }
+      select { width: 100%; }
+      
+      .file-label { padding: 1rem 0.75rem; }
+      .file-label div { font-size: 1.2rem; }
+      
+      .actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.4rem;
+      }
+      .actions #counter { order: 1; text-align: center; }
+      .btn-group { order: 2; }
+      .btn-group button { flex: 1; }
+      
+      .grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 0.6rem;
+      }
+      
+      .modal-content {
+        max-width: 100%;
+        max-height: 90vh;
+        padding: 1rem;
+        border-radius: 8px;
+      }
+      
+      .controls { gap: 0.4rem; }
+      .control-row { font-size: 0.75rem; gap: 0.3rem; }
+      
+      .modal-buttons { gap: 0.4rem; }
+      .modal-buttons button { padding: 0.4rem; font-size: 0.75rem; }
+    }
+    
+    @media (max-width: 480px) {
+      body { padding: 0.5rem; }
+      .theme-toggle { top: 0.25rem; right: 0.25rem; }
+      
+      header h1 { font-size: 1rem; margin-bottom: 0.2rem; }
+      header p { display: none; }
+      
+      .preset-bar { gap: 0.3rem; }
+      .badge { font-size: 0.65rem; padding: 0.15rem 0.3rem; }
+      
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.4rem;
+      }
+      .card { padding: 0.3rem; gap: 0.2rem; }
+      .card span { font-size: 0.6rem; }
+      .card-actions { gap: 0.15rem; }
+      .card-actions button { padding: 0.2rem; font-size: 0.6rem; }
+      
+      .actions #counter { font-size: 0.75rem; }
+      .btn { padding: 0.4rem 0.6rem; font-size: 0.75rem; }
+      
+      .preview-container { max-height: 400px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">☀️</button>
+    
+    <header>
+      <h1>Vetchalabs Wallpaper Studio</h1>
+      <p>Fine-tuned wallpapers with hardware-specific color profiles & dithering</p>
+    </header>
+
+    <!-- Preset Selector -->
+    <div class="preset-bar">
+      <div class="preset-group">
+        <label for="devicePreset">Target Device:</label>
+        <select id="devicePreset">
+          <option value="xteink">Xteink X4 (480 × 800 · 4-Gray BMP)</option>
+          <option value="kindle">Kindle Paperwhite (1264 × 1680 · 16-Gray PNG)</option>
+          <option value="applewatch">Apple Watch 45mm/Ultra (410 × 502 · OLED PNG)</option>
+        </select>
+      </div>
+      <span class="badge" id="specBadge">480 × 800 • 4-Level BMP</span>
+    </div>
+
+    <label class="file-label" for="fileInput">
+      <div style="font-size: 1.5rem;">➕ 📷</div>
+      <strong>Add Photos from Gallery</strong>
+      <p style="margin-top: 0.2rem;">Multi-selection supported</p>
+      <input type="file" id="fileInput" multiple accept="image/*" />
+    </label>
+
+    <div class="actions">
+      <span id="counter" style="color: var(--muted); font-size: 0.85rem;">0 wallpapers</span>
+      <div class="btn-group">
+        <button class="btn btn-secondary" id="selectAllBtn" disabled>Select All</button>
+        <button class="btn btn-secondary" id="deselectAllBtn" disabled>Deselect All</button>
+        <button class="btn btn-secondary" id="applyPresetBtn" disabled>Apply Preset to Selected</button>
+        <button class="btn btn-secondary" id="clearAllBtn" disabled>Clear All</button>
+        <button class="btn" id="downloadZipBtn" disabled>Download ZIP</button>
+      </div>
+    </div>
+
+    <div class="grid" id="previewGrid"></div>
+  </div>
+
+  <!-- Interactive Editor Modal -->
+  <div class="modal" id="editModal">
+    <div class="modal-content">
+      <h3 style="margin: 0; font-size: 1.1rem;">Adjust & Crop</h3>
+      <p style="font-size: 0.75rem; color: var(--muted); margin: 0;">Drag preview to pan. Use Zoom slider to crop.</p>
+
+      <div class="preview-container" id="touchArea">
+        <canvas id="editCanvas"></canvas>
+        <div class="watch-overlay" id="watchOverlay">
+          <div class="date">WED 17</div>
+          <div class="time">09:41</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="control-row">
+          <span>Preset</span>
+          <select id="presetSelect">
+            <option value="">— None —</option>
+            <option value="high-contrast">High Contrast</option>
+            <option value="natural">Natural</option>
+            <option value="vivid-dither">Vivid Dither</option>
+            <option value="soft">Soft</option>
+          </select>
+        </div>
+        <div class="control-row">
+          <span>Zoom</span>
+          <input type="range" id="zoomSlider" min="1" max="3" step="0.05" value="1">
+        </div>
+        <div class="control-row">
+          <span>Contrast</span>
+          <input type="range" id="contrastSlider" min="0.5" max="2.0" step="0.05" value="1.15">
+        </div>
+        <div class="control-row">
+          <span>Brightness</span>
+          <input type="range" id="brightnessSlider" min="-80" max="80" step="2" value="0">
+        </div>
+        <div class="control-row" id="ditherRow">
+          <span>Dither Style</span>
+          <select id="ditherSelect">
+            <option value="fs">Floyd-Steinberg Diffusion</option>
+            <option value="none">Flat Threshold / No Dither</option>
+          </select>
+        </div>
+        <div class="control-row" style="gap: 0.3rem; margin-top: 0.3rem;">
+          <input type="text" id="presetNameInput" placeholder="Preset name..." style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.3rem; border-radius: 4px; font-size: 0.75rem;">
+          <button class="btn" id="savePresetBtn" style="flex: 0 0 auto; padding: 0.3rem 0.5rem; font-size: 0.7rem;">Save</button>
+        </div>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" id="cancelEditBtn">Cancel</button>
+        <button class="btn" id="saveEditBtn">Apply & Update</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share Modal -->
+  <div class="modal" id="shareModal">
+    <div class="modal-content" style="max-width: 400px;">
+      <h3 style="margin: 0 0 0.5rem; font-size: 1rem;">Share Wallpaper</h3>
+      <textarea id="shareMessage" placeholder="Add your message here (optional)..." style="width: 100%; height: 80px; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.5rem; border-radius: 6px; font-size: 0.8rem; font-family: inherit; resize: vertical; margin-bottom: 0.5rem;"></textarea>
+      <p style="font-size: 0.7rem; color: var(--muted); margin: 0 0 0.5rem 0;">
+        <span id="charCount">0</span>/200 characters
+      </p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; margin-bottom: 0.5rem;">
+        <button class="btn" id="shareWhatsapp" style="font-size: 0.8rem; padding: 0.4rem;">📱 WhatsApp</button>
+        <button class="btn" id="shareEmail" style="font-size: 0.8rem; padding: 0.4rem;">📧 Email</button>
+        <button class="btn" id="shareCopy" style="font-size: 0.8rem; padding: 0.4rem;">📋 Copy</button>
+      </div>
+      <button class="btn btn-secondary" id="closeShareBtn" style="width: 100%; font-size: 0.8rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- Custom Device Configuration Modal -->
+  <div class="modal" id="customDeviceModal">
+    <div class="modal-content" style="max-width: 450px;">
+      <h3 style="margin: 0 0 0.5rem; font-size: 1rem;">Configure Custom Device</h3>
+      <div class="controls">
+        <div class="control-row">
+          <span>Device Name</span>
+          <input type="text" id="customName" value="Custom Device" style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.3rem; border-radius: 4px; font-size: 0.75rem;">
+        </div>
+        <div class="control-row">
+          <span>Width (px)</span>
+          <input type="number" id="customWidth" value="600" min="100" max="2000" style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.3rem; border-radius: 4px; font-size: 0.75rem;">
+        </div>
+        <div class="control-row">
+          <span>Height (px)</span>
+          <input type="number" id="customHeight" value="800" min="100" max="2000" style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.3rem; border-radius: 4px; font-size: 0.75rem;">
+        </div>
+        <div class="control-row">
+          <span>Palette (Hex colors)</span>
+        </div>
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0.4rem; max-height: 120px; overflow-y: auto;">
+          <div id="paletteList"></div>
+        </div>
+        <button class="btn btn-secondary" id="addColorBtn" style="width: 100%; font-size: 0.75rem; margin-top: 0.3rem;">+ Add Color</button>
+        <div class="control-row">
+          <span>Output Format</span>
+          <select id="customFormat" style="flex: 1;">
+            <option value="png">PNG</option>
+            <option value="bmp">BMP</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" id="closeCustomBtn">Cancel</button>
+        <button class="btn" id="saveCustomBtn">Save & Use</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Global error handler
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+      console.error('Error:', msg, 'at line', lineNo, ':', error);
+      return false;
+    };
+
+    try {
+      // ========== THEME MANAGEMENT ==========
+      const themeToggle = document.getElementById('themeToggle');
+      
+      function initTheme() {
+        const savedTheme = localStorage.getItem('ditherdeck-theme') || 'dark';
+        document.body.classList.toggle('light-theme', savedTheme === 'light');
+        updateThemeToggleButton(savedTheme);
+      }
+      
+      function updateThemeToggleButton(theme) {
+        themeToggle.textContent = theme === 'light' ? '🌙' : '☀️';
+        themeToggle.title = theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
+      }
+      
+      themeToggle.addEventListener('click', () => {
+        const currentTheme = localStorage.getItem('ditherdeck-theme') || 'dark';
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        document.body.classList.toggle('light-theme', newTheme === 'light');
+        localStorage.setItem('ditherdeck-theme', newTheme);
+        updateThemeToggleButton(newTheme);
+      });
+      
+      // Initialize theme on page load
+      initTheme();
+    
+    // ========== CORE APPLICATION ==========
+    
+    // Preset Management
+    const DEFAULT_PRESETS = {
+      'high-contrast': { contrast: 1.8, brightness: 5, dither: 'fs', zoom: 1.0 },
+      'natural': { contrast: 1.15, brightness: 0, dither: 'fs', zoom: 1.0 },
+      'vivid-dither': { contrast: 1.5, brightness: 10, dither: 'fs', zoom: 1.0 },
+      'soft': { contrast: 0.9, brightness: -10, dither: 'none', zoom: 1.0 }
+    };
+    
+    function loadPresets() {
+      const saved = localStorage.getItem('ditherdeck-presets');
+      return saved ? { ...DEFAULT_PRESETS, ...JSON.parse(saved) } : DEFAULT_PRESETS;
+    }
+    
+    function savePresets(presets) {
+      const customPresets = {};
+      Object.keys(presets).forEach(key => {
+        if (!DEFAULT_PRESETS[key]) customPresets[key] = presets[key];
+      });
+      localStorage.setItem('ditherdeck-presets', JSON.stringify(customPresets));
+    }
+    
+    function updatePresetDropdown() {
+      const select = document.getElementById('presetSelect');
+      const presets = loadPresets();
+      const currentOptions = Array.from(select.options).map(o => o.value);
+      
+      Object.keys(presets).forEach(key => {
+        if (!currentOptions.includes(key) && !DEFAULT_PRESETS[key]) {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = key.replace(/-/g, ' ');
+          select.appendChild(opt);
+        }
+      });
+    }
+    
+    // ========== HARDWARE PROFILES ==========
+    const PRESETS = {
+      xteink: {
+        name: "Xteink X4",
+        width: 480,
+        height: 800,
+        ext: "bmp",
+        format: "bmp24",
+        mode: "gray4",
+        folder: "sleep",
+        badge: "480 × 800 • 4-Level BMP",
+        previewMaxH: 340
+      },
+      kindle: {
+        name: "Kindle Paperwhite",
+        width: 1264,
+        height: 1680,
+        ext: "png",
+        format: "png",
+        mode: "gray16",
+        folder: "kindle_wallpapers",
+        badge: "1264 × 1680 • 16-Level PNG",
+        previewMaxH: 320
+      },
+      applewatch: {
+        name: "Apple Watch (45mm/Ultra)",
+        width: 410,
+        height: 502,
+        ext: "png",
+        format: "png",
+        mode: "colorOled",
+        folder: "watch_faces",
+        badge: "410 × 502 • OLED Color PNG",
+        previewMaxH: 260
+      },
+      custom: {
+        name: "Custom Device",
+        width: 600,
+        height: 800,
+        ext: "png",
+        format: "png",
+        mode: "colorCustom",
+        folder: "custom",
+        badge: "Custom • Edit to Configure",
+        previewMaxH: 300,
+        palette: ['#000000', '#FFFFFF'],
+        isCustom: true
+      }
+    };
+
+    let currentPreset = PRESETS.xteink;
+
+    const devicePreset = document.getElementById('devicePreset');
+    const specBadge = document.getElementById('specBadge');
+    const fileInput = document.getElementById('fileInput');
+    const previewGrid = document.getElementById('previewGrid');
+    const downloadZipBtn = document.getElementById('downloadZipBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const counter = document.getElementById('counter');
+
+    const editModal = document.getElementById('editModal');
+    const editCanvas = document.getElementById('editCanvas');
+    const editCtx = editCanvas ? editCanvas.getContext('2d') : null;
+    const touchArea = document.getElementById('touchArea');
+    const watchOverlay = document.getElementById('watchOverlay');
+    const zoomSlider = document.getElementById('zoomSlider');
+    const contrastSlider = document.getElementById('contrastSlider');
+    const brightnessSlider = document.getElementById('brightnessSlider');
+    const ditherSelect = document.getElementById('ditherSelect');
+    const ditherRow = document.getElementById('ditherRow');
+    const saveEditBtn = document.getElementById('saveEditBtn');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+    const presetSelect = document.getElementById('presetSelect');
+    const savePresetBtn = document.getElementById('savePresetBtn');
+    const presetNameInput = document.getElementById('presetNameInput');
+
+    const shareModal = document.getElementById('shareModal');
+    const shareMessage = document.getElementById('shareMessage');
+    const charCount = document.getElementById('charCount');
+    const shareWhatsapp = document.getElementById('shareWhatsapp');
+    const shareEmail = document.getElementById('shareEmail');
+    const shareCopy = document.getElementById('shareCopy');
+    const closeShareBtn = document.getElementById('closeShareBtn');
+
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deselectAllBtn = document.getElementById('deselectAllBtn');
+    const applyPresetBtn = document.getElementById('applyPresetBtn');
+
+    let items = [];
+    let activeItem = null;
+    let selectedItems = new Set();
+
+    // Preset Change Event
+    devicePreset.addEventListener('change', async (e) => {
+      currentPreset = PRESETS[e.target.value];
+      specBadge.textContent = currentPreset.badge;
+
+      // Re-render existing items according to new device specifications
+      for (const item of items) {
+        item.filename = replaceExtension(item.rawName, currentPreset.ext);
+        await renderItem(item);
+        updateCardUI(item);
+      }
+    });
+
+    function replaceExtension(fname, ext) {
+      return `${fname.replace(/\.[^/.]+$/, "")}.${ext}`;
+    }
+
+    fileInput.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
+
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        await loadAndProcessInitial(file);
+      }
+      updateUIState();
+      fileInput.value = '';
+    });
+
+    function updateUIState() {
+      const hasItems = items.length > 0;
+      downloadZipBtn.disabled = !hasItems;
+      clearAllBtn.disabled = !hasItems;
+      selectAllBtn.disabled = !hasItems;
+      deselectAllBtn.disabled = !hasItems || selectedItems.size === 0;
+      applyPresetBtn.disabled = selectedItems.size === 0;
+      counter.textContent = `${items.length} wallpaper(s)${selectedItems.size > 0 ? ` (${selectedItems.size} selected)` : ''} ready`;
+    }
+    
+    // Batch Operation Button Handlers
+    selectAllBtn.addEventListener('click', () => {
+      items.forEach(item => {
+        selectedItems.add(item.id);
+        if (item.checkbox) item.checkbox.checked = true;
+        if (item.cardElement) item.cardElement.classList.add('selected');
+      });
+      updateUIState();
+    });
+    
+    deselectAllBtn.addEventListener('click', () => {
+      selectedItems.clear();
+      items.forEach(item => {
+        if (item.checkbox) item.checkbox.checked = false;
+        if (item.cardElement) item.cardElement.classList.remove('selected');
+      });
+      updateUIState();
+    });
+    
+    applyPresetBtn.addEventListener('click', async () => {
+      const presetName = prompt('Enter preset name (or leave blank to use current settings):');
+      if (presetName === null) return;
+      
+      const selectedArray = Array.from(selectedItems).map(id => items.find(item => item.id === id)).filter(Boolean);
+      const presetData = presetName ? loadPresets()[presetName] : {
+        contrast: parseFloat(contrastSlider.value),
+        brightness: parseFloat(brightnessSlider.value),
+        dither: ditherSelect.value,
+        zoom: parseFloat(zoomSlider.value)
+      };
+      
+      if (!presetData) {
+        alert('Preset not found');
+        return;
+      }
+      
+      for (const item of selectedArray) {
+        item.params = { ...item.params, ...presetData };
+        await renderItem(item);
+        updateCardUI(item);
+      }
+      alert(`Applied to ${selectedArray.length} item(s)`);
+    }
+
+    function loadAndProcessInitial(file) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = async () => {
+          const item = {
+            id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+            rawName: file.name,
+            filename: replaceExtension(file.name, currentPreset.ext),
+            img: img,
+            params: {
+              zoom: 1.0,
+              panX: 0,
+              panY: 0,
+              contrast: 1.15,
+              brightness: 0,
+              dither: 'fs'
+            },
+            canvas: document.createElement('canvas'),
+            cardElement: null,
+            blob: null,
+            checkbox: null
+          };
+
+          await renderItem(item);
+          items.push(item);
+          addToUI(item);
+          resolve();
+        };
+        img.onerror = () => {
+          console.error('Failed to load image:', file.name);
+          resolve();
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    async function renderItem(item) {
+      item.canvas.width = currentPreset.width;
+      item.canvas.height = currentPreset.height;
+      const ctx = item.canvas.getContext('2d');
+      drawProcessed(ctx, item.img, item.params, currentPreset);
+
+      if (currentPreset.format === 'bmp24') {
+        const imgData = ctx.getImageData(0, 0, currentPreset.width, currentPreset.height);
+        item.blob = create24BitBMP(imgData.data, currentPreset.width, currentPreset.height);
+      } else {
+        item.blob = await new Promise(res => item.canvas.toBlob(res, 'image/png'));
+      }
+    }
+
+    function drawProcessed(ctx, img, params, preset) {
+      const w = preset.width;
+      const h = preset.height;
+
+      const baseScale = Math.max(w / img.width, h / img.height);
+      const currentScale = baseScale * params.zoom;
+      const sw = img.width * currentScale;
+      const sh = img.height * currentScale;
+
+      const ox = ((w - sw) / 2) + params.panX;
+      const oy = ((h - sh) / 2) + params.panY;
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, ox, oy, sw, sh);
+
+      const imgData = ctx.getImageData(0, 0, w, h);
+      applyDeviceColorTransform(imgData, params, preset);
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    // Hardware-Specific Rendering Engine
+    function applyDeviceColorTransform(imgData, params, preset) {
+      const d = imgData.data;
+      const w = preset.width;
+      const h = preset.height;
+
+      // 1. OLED True-Black Color Mode (Apple Watch)
+      if (preset.mode === 'colorOled') {
+        for (let i = 0; i < d.length; i += 4) {
+          // Contrast & Brightness on RGB
+          for (let c = 0; c < 3; c++) {
+            let val = ((d[i + c] - 128) * params.contrast) + 128 + params.brightness;
+            d[i + c] = Math.min(255, Math.max(0, val));
+          }
+          // True black optimization: clip dark grays to pure #000000 to save OLED battery
+          if (d[i] < 14 && d[i + 1] < 14 && d[i + 2] < 14) {
+            d[i] = 0; d[i + 1] = 0; d[i + 2] = 0;
+          }
+        }
+        return;
+      }
+
+      // 3. Custom Palette Mode
+      if (preset.mode === 'colorCustom' && preset.palette) {
+        // Convert custom hex palette to RGB
+        const customPalette = preset.palette.map(hex => {
+          const rgb = parseInt(hex.replace('#', ''), 16);
+          return { r: (rgb >> 16) & 255, g: (rgb >> 8) & 255, b: rgb & 255 };
+        });
+
+        for (let i = 0; i < d.length; i += 4) {
+          // Apply contrast & brightness to RGB
+          for (let c = 0; c < 3; c++) {
+            let val = ((d[i + c] - 128) * params.contrast) + 128 + params.brightness;
+            d[i + c] = Math.min(255, Math.max(0, val));
+          }
+
+          // Find nearest color in custom palette
+          let closestIdx = 0;
+          let minDist = Infinity;
+          for (let p = 0; p < customPalette.length; p++) {
+            const cp = customPalette[p];
+            const dist = Math.pow(d[i] - cp.r, 2) + Math.pow(d[i + 1] - cp.g, 2) + Math.pow(d[i + 2] - cp.b, 2);
+            if (dist < minDist) {
+              minDist = dist;
+              closestIdx = p;
+            }
+          }
+
+          const closest = customPalette[closestIdx];
+          d[i] = closest.r;
+          d[i + 1] = closest.g;
+          d[i + 2] = closest.b;
+          d[i + 3] = 255;
+        }
+        return;
+      }
+
+      // 2. Grayscale E-Ink Modes (Xteink: 4-Level, Kindle: 16-Level)
+      const gray = new Float32Array(w * h);
+      for (let i = 0; i < gray.length; i++) {
+        const idx = i * 4;
+        let lum = 0.299 * d[idx] + 0.587 * d[idx + 1] + 0.114 * d[idx + 2];
+        lum = ((lum - 128) * params.contrast) + 128 + params.brightness;
+        gray[i] = Math.min(255, Math.max(0, lum));
+      }
+
+      // Palette definition
+      let palette = [];
+      if (preset.mode === 'gray4') {
+        palette = [0, 85, 170, 255]; // 4 Grays for Xteink
+      } else if (preset.mode === 'gray16') {
+        for (let step = 0; step < 16; step++) {
+          palette.push(Math.round((step / 15) * 255)); // 16 Grays for Kindle
+        }
+      }
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
+          const oldVal = gray[idx];
+
+          let closest = palette[0];
+          let minDist = Math.abs(oldVal - palette[0]);
+          for (let p = 1; p < palette.length; p++) {
+            const dist = Math.abs(oldVal - palette[p]);
+            if (dist < minDist) {
+              minDist = dist;
+              closest = palette[p];
+            }
+          }
+
+          gray[idx] = closest;
+
+          if (params.dither === 'fs') {
+            const err = oldVal - closest;
+            if (x + 1 < w)               gray[idx + 1] += (err * 7) / 16;
+            if (x - 1 >= 0 && y + 1 < h) gray[idx + w - 1] += (err * 3) / 16;
+            if (y + 1 < h)               gray[idx + w] += (err * 5) / 16;
+            if (x + 1 < w && y + 1 < h)  gray[idx + w + 1] += (err * 1) / 16;
+          }
+        }
+      }
+
+      for (let i = 0; i < gray.length; i++) {
+        const idx = i * 4;
+        const val = gray[i];
+        d[idx] = val;
+        d[idx + 1] = val;
+        d[idx + 2] = val;
+        d[idx + 3] = 255;
+      }
+    }
+
+    // Modal Crop & Drag Setup
+    function openEditor(item) {
+      activeItem = item;
+      window.tempParams = { ...item.params };
+
+      // Configure editor dimensions to match device aspect ratio
+      const aspect = currentPreset.width / currentPreset.height;
+      const targetHeight = currentPreset.previewMaxH;
+      const targetWidth = Math.round(targetHeight * aspect);
+
+      touchArea.style.width = `${targetWidth}px`;
+      touchArea.style.height = `${targetHeight}px`;
+
+      editCanvas.width = currentPreset.width;
+      editCanvas.height = currentPreset.height;
+
+      // Toggle Apple Watch Safe-Zone Overlay
+      watchOverlay.style.display = currentPreset.name.includes("Watch") ? "flex" : "none";
+      ditherRow.style.display = (currentPreset.mode === 'colorOled' || currentPreset.mode === 'colorCustom') ? 'none' : 'flex';
+
+      // Load presets
+      updatePresetDropdown();
+      presetSelect.value = '';
+      presetNameInput.value = '';
+      
+      zoomSlider.value = tempParams.zoom;
+      contrastSlider.value = tempParams.contrast;
+      brightnessSlider.value = tempParams.brightness;
+      ditherSelect.value = tempParams.dither;
+
+      updateModalPreview();
+      editModal.classList.add('active');
+    }
+
+    function updateModalPreview() {
+      drawProcessed(editCtx, activeItem.img, window.tempParams, currentPreset);
+    }
+
+    let isDragging = false;
+    let startX = 0, startY = 0;
+
+    touchArea.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      touchArea.setPointerCapture(e.pointerId);
+    });
+
+    touchArea.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      const scaleMultiplier = currentPreset.width / parseFloat(touchArea.style.width);
+      const dx = (e.clientX - startX) * scaleMultiplier;
+      const dy = (e.clientY - startY) * scaleMultiplier;
+      startX = e.clientX;
+      startY = e.clientY;
+
+      window.tempParams.panX += dx;
+      window.tempParams.panY += dy;
+      updateModalPreview();
+    });
+
+    touchArea.addEventListener('pointerup', (e) => {
+      isDragging = false;
+      try { touchArea.releasePointerCapture(e.pointerId); } catch(err){}
+    });
+
+    zoomSlider.addEventListener('input', (e) => {
+      window.tempParams.zoom = parseFloat(e.target.value);
+      updateModalPreview();
+    });
+    contrastSlider.addEventListener('input', (e) => {
+      window.tempParams.contrast = parseFloat(e.target.value);
+      updateModalPreview();
+    });
+    brightnessSlider.addEventListener('input', (e) => {
+      window.tempParams.brightness = parseFloat(e.target.value);
+      updateModalPreview();
+    });
+    ditherSelect.addEventListener('change', (e) => {
+      window.tempParams.dither = e.target.value;
+      updateModalPreview();
+    });
+
+    presetSelect.addEventListener('change', (e) => {
+      if (e.target.value) {
+        const presets = loadPresets();
+        const preset = presets[e.target.value];
+        if (preset) {
+          zoomSlider.value = preset.zoom || 1.0;
+          contrastSlider.value = preset.contrast || 1.15;
+          brightnessSlider.value = preset.brightness || 0;
+          ditherSelect.value = preset.dither || 'fs';
+          
+          window.tempParams = {
+            zoom: parseFloat(zoomSlider.value),
+            panX: window.tempParams.panX,
+            panY: window.tempParams.panY,
+            contrast: parseFloat(contrastSlider.value),
+            brightness: parseFloat(brightnessSlider.value),
+            dither: ditherSelect.value
+          };
+          updateModalPreview();
+        }
+      }
+    });
+
+    savePresetBtn.addEventListener('click', () => {
+      const presetName = presetNameInput.value.trim();
+      if (!presetName) {
+        alert('Please enter a preset name');
+        return;
+      }
+      
+      const presets = loadPresets();
+      presets[presetName] = {
+        contrast: parseFloat(contrastSlider.value),
+        brightness: parseFloat(brightnessSlider.value),
+        dither: ditherSelect.value,
+        zoom: parseFloat(zoomSlider.value)
+      };
+      savePresets(presets);
+      updatePresetDropdown();
+      presetNameInput.value = '';
+      alert(`Preset "${presetName}" saved!`);
+    });
+
+    saveEditBtn.addEventListener('click', async () => {
+      activeItem.params = { ...window.tempParams };
+      await renderItem(activeItem);
+      updateCardUI(activeItem);
+      editModal.classList.remove('active');
+    });
+
+    cancelEditBtn.addEventListener('click', () => {
+      editModal.classList.remove('active');
+    });
+
+    // ========== SHARE FUNCTIONALITY ==========
+    let activeShareItem = null;
+
+    function openShareModal(item) {
+      activeShareItem = item;
+      shareMessage.value = '';
+      charCount.textContent = '0';
+      shareModal.classList.add('active');
+    }
+
+    shareMessage.addEventListener('input', (e) => {
+      charCount.textContent = Math.min(e.target.value.length, 200);
+      if (e.target.value.length > 200) {
+        e.target.value = e.target.value.substring(0, 200);
+      }
+    });
+
+    function generateShareLink() {
+      const deviceKey = Object.keys(PRESETS).find(k => PRESETS[k] === currentPreset) || 'xteink';
+      const baseUrl = window.location.origin + window.location.pathname.replace('index.html', '');
+      return `${baseUrl}?device=${deviceKey}`;
+    }
+
+    function buildShareText() {
+      const customMsg = shareMessage.value.trim();
+      const defaultMsg = `Check out my e-ink wallpaper created with DitherDeck!`;
+      const link = generateShareLink();
+      return customMsg ? `${customMsg}\n\n${defaultMsg}\n${link}` : `${defaultMsg}\n${link}`;
+    }
+
+    shareWhatsapp.addEventListener('click', () => {
+      const text = encodeURIComponent(buildShareText());
+      const isMobile = /mobile|android|iphone/i.test(navigator.userAgent);
+      const whatsappUrl = isMobile 
+        ? `whatsapp://send?text=${text}`
+        : `https://wa.me/?text=${text}`;
+      window.open(whatsappUrl, '_blank');
+      shareModal.classList.remove('active');
+    });
+
+    shareEmail.addEventListener('click', () => {
+      const subject = encodeURIComponent('Check out my e-ink wallpaper!');
+      const body = encodeURIComponent(buildShareText());
+      window.location.href = `mailto:?subject=${subject}&body=${body}`;
+      shareModal.classList.remove('active');
+    });
+
+    shareCopy.addEventListener('click', () => {
+      const text = buildShareText();
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard!');
+        shareModal.classList.remove('active');
+      }).catch(() => {
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert('Copied to clipboard!');
+        shareModal.classList.remove('active');
+      });
+    });
+
+    closeShareBtn.addEventListener('click', () => {
+      shareModal.classList.remove('active');
+    });
+
+    function removeItem(id) {
+      const index = items.findIndex(item => item.id === id);
+      if (index !== -1) {
+        const [removed] = items.splice(index, 1);
+        if (removed.cardElement) removed.cardElement.remove();
+        selectedItems.delete(id);
+        updateUIState();
+      }
+    }
+
+    clearAllBtn.addEventListener('click', () => {
+      if (confirm("Remove all selected wallpapers?")) {
+        items = [];
+        previewGrid.innerHTML = '';
+        updateUIState();
+      }
+    });
+
+    function addToUI(item) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.id = item.id;
+      item.cardElement = card;
+
+      // Checkbox for batch selection
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'card-checkbox';
+      checkbox.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          selectedItems.add(item.id);
+          card.classList.add('selected');
+        } else {
+          selectedItems.delete(item.id);
+          card.classList.remove('selected');
+        }
+        updateUIState();
+      });
+      item.checkbox = checkbox;
+      card.appendChild(checkbox);
+
+      const label = document.createElement('span');
+      label.className = 'card-name';
+      label.textContent = item.filename;
+
+      const actions = document.createElement('div');
+      actions.className = 'card-actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '✏️ Edit';
+      editBtn.onclick = () => openEditor(item);
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'card-save-btn';
+      saveBtn.textContent = `Save .${currentPreset.ext.toUpperCase()}`;
+      saveBtn.onclick = () => saveAs(item.blob, item.filename);
+
+      const shareBtn = document.createElement('button');
+      shareBtn.textContent = '🔗 Share';
+      shareBtn.onclick = () => openShareModal(item);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'del-btn';
+      deleteBtn.textContent = '🗑️';
+      deleteBtn.onclick = () => removeItem(item.id);
+
+      item.canvas.onclick = () => openEditor(item);
+
+      actions.appendChild(editBtn);
+      actions.appendChild(saveBtn);
+      actions.appendChild(shareBtn);
+      actions.appendChild(deleteBtn);
+
+      card.appendChild(item.canvas);
+      card.appendChild(label);
+      card.appendChild(actions);
+      previewGrid.appendChild(card);
+    }
+
+    function updateCardUI(item) {
+      if (!item.cardElement) return;
+      item.cardElement.querySelector('.card-name').textContent = item.filename;
+      item.cardElement.querySelector('.card-save-btn').textContent = `Save .${currentPreset.ext.toUpperCase()}`;
+    }
+
+    // 24-bit uncompressed BMP binary encoder (Bottom-up, little-endian)
+    function create24BitBMP(rgbaData, width, height) {
+      const rowSize = Math.floor((24 * width + 31) / 32) * 4;
+      const pixelArraySize = rowSize * height;
+      const fileSize = 54 + pixelArraySize;
+
+      const buffer = new ArrayBuffer(fileSize);
+      const view = new DataView(buffer);
+
+      view.setUint16(0, 0x4D42, false); // BM
+      view.setUint32(2, fileSize, true);
+      view.setUint32(10, 54, true);
+
+      view.setUint32(14, 40, true);
+      view.setInt32(18, width, true);
+      view.setInt32(22, height, true);
+      view.setUint16(26, 1, true);
+      view.setUint16(28, 24, true);
+      view.setUint32(30, 0, true);
+      view.setUint32(34, pixelArraySize, true);
+      view.setInt32(38, 2835, true);
+      view.setInt32(42, 2835, true);
+
+      let offset = 54;
+      for (let y = height - 1; y >= 0; y--) {
+        for (let x = 0; x < width; x++) {
+          const srcIdx = (y * width + x) * 4;
+          view.setUint8(offset++, rgbaData[srcIdx + 2]); // B
+          view.setUint8(offset++, rgbaData[srcIdx + 1]); // G
+          view.setUint8(offset++, rgbaData[srcIdx]);     // R
+        }
+        const padding = rowSize - (width * 3);
+        for (let p = 0; p < padding; p++) view.setUint8(offset++, 0);
+      }
+
+      return new Blob([buffer], { type: 'image/bmp' });
+    }
+
+    // Bundle all into a single ZIP organized by device folder
+    downloadZipBtn.addEventListener('click', async () => {
+      const zip = new JSZip();
+      const folder = zip.folder(currentPreset.folder);
+      items.forEach(item => folder.file(item.filename, item.blob));
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, `${currentPreset.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_wallpapers.zip`);
+    });
+    } catch (error) {
+      console.error('Critical error in application:', error);
+    }
+  </script>
+</body>
+</html>

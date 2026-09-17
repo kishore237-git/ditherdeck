@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Test - Theme Toggle & Image Upload</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --text: #f8fafc;
+    }
+    
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, sans-serif;
+      padding: 2rem;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    
+    body.light-theme {
+      --bg: #f8fafc;
+      --text: #0f172a;
+    }
+    
+    .button {
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      cursor: pointer;
+      font-size: 1rem;
+      background: #38bdf8;
+      color: #000;
+      border: none;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test Page</h1>
+  <button id="themeToggle">Toggle Theme (Click me!)</button>
+  <p id="status">Current theme: dark</p>
+  
+  <h2>Upload Image</h2>
+  <input type="file" id="fileInput" accept="image/*" />
+  <p id="uploadStatus">No image uploaded</p>
+  <img id="preview" src="" alt="Preview" style="max-width: 200px; margin-top: 1rem;" />
+
+  <script>
+    // ========== THEME TOGGLE ==========
+    const themeToggle = document.getElementById('themeToggle');
+    const statusText = document.getElementById('status');
+    
+    themeToggle.addEventListener('click', () => {
+      console.log("Theme button clicked!");
+      const currentTheme = localStorage.getItem('theme') || 'dark';
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      
+      document.body.classList.toggle('light-theme', newTheme === 'light');
+      localStorage.setItem('theme', newTheme);
+      statusText.textContent = `Current theme: ${newTheme}`;
+      themeToggle.textContent = `Theme is now: ${newTheme.toUpperCase()}`;
+      console.log(`Theme changed to: ${newTheme}`);
+    });
+    
+    // Initialize theme from storage
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    if (savedTheme === 'light') {
+      document.body.classList.add('light-theme');
+    }
+    statusText.textContent = `Current theme: ${savedTheme}`;
+    console.log(`App initialized with theme: ${savedTheme}`);
+    
+    // ========== IMAGE UPLOAD ==========
+    const fileInput = document.getElementById('fileInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+    const preview = document.getElementById('preview');
+    
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      console.log(`File selected: ${file.name}`);
+      uploadStatus.textContent = `Uploaded: ${file.name} (${file.size} bytes)`;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        preview.src = event.target.result;
+        console.log("Image preview loaded");
+      };
+      reader.readAsDataURL(file);
+    });
+    
+    console.log("Test page fully initialized");
+  </script>
+</body>
+</html>
