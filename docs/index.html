@@ -157,6 +157,16 @@
       width: 100%;
       text-align: center;
     }
+    .card-actions { display: flex; gap: 0.35rem; width: 100%; }
+    .card-actions .btn { flex: 1; padding: 0.4rem 0.3rem; font-size: 0.72rem; }
+    .modal { display: none; position: fixed; inset: 0; background: #0009; z-index: 10; padding: 1rem; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; width: min(100%, 420px); }
+    .modal-content h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
+    .edit-preview { display: block; width: 100%; max-height: 45vh; object-fit: contain; background: #000; margin-bottom: 0.75rem; }
+    .control { display: grid; grid-template-columns: 90px 1fr 42px; align-items: center; gap: 0.5rem; margin: 0.55rem 0; font-size: 0.8rem; }
+    .control output { text-align: right; color: var(--muted); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.9rem; }
   </style>
 </head>
 <body>
@@ -194,6 +204,17 @@
     <div class="grid" id="previewGrid"></div>
   </div>
 
+  <div class="modal" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+    <div class="modal-content">
+      <h2 id="editTitle">Edit wallpaper</h2>
+      <canvas class="edit-preview" id="editCanvas"></canvas>
+      <label class="control">Zoom <input id="editZoom" type="range" min="1" max="2" step="0.01" value="1"><output id="editZoomValue">1.00</output></label>
+      <label class="control">Contrast <input id="editContrast" type="range" min="0.5" max="2" step="0.05" value="1"><output id="editContrastValue">1.00</output></label>
+      <label class="control">Brightness <input id="editBrightness" type="range" min="-100" max="100" value="0"><output id="editBrightnessValue">0</output></label>
+      <div class="modal-actions"><button class="btn btn-secondary" id="cancelEdit">Cancel</button><button class="btn" id="applyEdit">Apply</button></div>
+    </div>
+  </div>
+
   <script>
     console.log("App starting...");
 
@@ -202,6 +223,20 @@
     const counter = document.getElementById('counter');
     const fileInput = document.getElementById('fileInput');
     const previewGrid = document.getElementById('previewGrid');
+    const devicePreset = document.getElementById('devicePreset');
+    const specBadge = document.getElementById('specBadge');
+    const editModal = document.getElementById('editModal');
+    const editCanvas = document.getElementById('editCanvas');
+    const editZoom = document.getElementById('editZoom');
+    const editContrast = document.getElementById('editContrast');
+    const editBrightness = document.getElementById('editBrightness');
+    const activeEditTitle = document.getElementById('editTitle');
+    let activeItem = null;
+    const deviceSpecs = {
+      xteink: { width: 480, height: 800, badge: '480 × 800 • 4-Level BMP' },
+      kindle: { width: 1264, height: 1680, badge: '1264 × 1680 • 16-Level PNG' },
+      applewatch: { width: 410, height: 502, badge: '410 × 502 • OLED PNG' }
+    };
     
     function initTheme() {
       const savedTheme = localStorage.getItem('ditherdeck-theme') || 'dark';
@@ -227,6 +262,56 @@
     
     // ========== IMAGE LOADING ==========
     let items = [];
+
+    function drawItem(item, canvas, params) {
+      const spec = deviceSpecs[devicePreset.value];
+      canvas.width = spec.width;
+      canvas.height = spec.height;
+      const ctx = canvas.getContext('2d');
+      const scale = Math.max(spec.width / item.img.width, spec.height / item.img.height) * params.zoom;
+      const x = (spec.width - item.img.width * scale) / 2;
+      const y = (spec.height - item.img.height * scale) / 2;
+      ctx.filter = `contrast(${params.contrast}) brightness(${100 + params.brightness}%)`;
+      ctx.drawImage(item.img, x, y, item.img.width * scale, item.img.height * scale);
+      ctx.filter = 'none';
+    }
+
+    function redrawItem(item) {
+      drawItem(item, item.canvas, item.params);
+    }
+
+    function openEditor(item) {
+      activeItem = item;
+      activeEditTitle.textContent = `Edit ${item.filename}`;
+      editZoom.value = item.params.zoom;
+      editContrast.value = item.params.contrast;
+      editBrightness.value = item.params.brightness;
+      updateEditorPreview();
+      editModal.classList.add('active');
+    }
+
+    function updateEditorPreview() {
+      if (!activeItem) return;
+      drawItem(activeItem, editCanvas, { zoom: Number(editZoom.value), contrast: Number(editContrast.value), brightness: Number(editBrightness.value) });
+      document.getElementById('editZoomValue').textContent = Number(editZoom.value).toFixed(2);
+      document.getElementById('editContrastValue').textContent = Number(editContrast.value).toFixed(2);
+      document.getElementById('editBrightnessValue').textContent = editBrightness.value;
+    }
+
+    [editZoom, editContrast, editBrightness].forEach(input => input.addEventListener('input', updateEditorPreview));
+    document.getElementById('cancelEdit').addEventListener('click', () => editModal.classList.remove('active'));
+    document.getElementById('applyEdit').addEventListener('click', () => {
+      if (!activeItem) return;
+      activeItem.params = { zoom: Number(editZoom.value), contrast: Number(editContrast.value), brightness: Number(editBrightness.value) };
+      redrawItem(activeItem);
+      editModal.classList.remove('active');
+    });
+
+    devicePreset.addEventListener('change', () => {
+      const spec = deviceSpecs[devicePreset.value];
+      specBadge.textContent = spec.badge;
+      items.forEach(redrawItem);
+    });
     
     fileInput.addEventListener('change', (e) => {
       const files = Array.from(e.target.files);
@@ -240,18 +325,13 @@
           const item = {
             id: 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
             filename: file.name,
-            img: img
+            img: img,
+            params: { zoom: 1, contrast: 1, brightness: 0 }
           };
           
           const canvas = document.createElement('canvas');
-          canvas.width = 480;
-          canvas.height = 800;
-          const ctx = canvas.getContext('2d');
-          
-          const scale = Math.max(480 / img.width, 800 / img.height);
-          const x = (480 - img.width * scale) / 2;
-          const y = (800 - img.height * scale) / 2;
-          ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+          item.canvas = canvas;
+          drawItem(item, canvas, item.params);
           
           const card = document.createElement('div');
           card.className = 'card';
@@ -260,6 +340,16 @@
           const label = document.createElement('span');
           label.textContent = file.name;
           card.appendChild(label);
+
+          const cardActions = document.createElement('div');
+          cardActions.className = 'card-actions';
+          const editButton = document.createElement('button');
+          editButton.className = 'btn';
+          editButton.textContent = '✏️ Edit';
+          editButton.type = 'button';
+          editButton.addEventListener('click', () => openEditor(item));
+          cardActions.appendChild(editButton);
+          card.appendChild(cardActions);
           
           previewGrid.appendChild(card);
           items.push(item);
